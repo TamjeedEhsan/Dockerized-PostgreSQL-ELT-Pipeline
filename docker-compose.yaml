@@ -1,0 +1,45 @@
+version: '3' #tells docker which compose file format is being used
+
+services:  #services is where everything in docker runs
+  source_postgres:    #creating one postgres container
+    image: postgres:latest   #download the latest official PostgresSQL image and create a container from it
+    ports:
+      -"5433:5432"   #my computer = 5433, PostgreSQL always listens on 5432
+    networks:
+      -elt_network   #they are all connected to a network so that they can communicate
+    environment:
+      -POSTGRES_DB: source_db   #created a database called source_db
+      -POSTGRES_USER: postgres  #login username
+      -POSTGRES_PASSWORD: secret #login password
+    volumes:
+      - ./source_db_init.sql:/docker-entrypoint-initdb.d/init.sql
+    # PostgreSQL image automatically executes any .sql files places in the folder the first time the db is initialized
+    # docker copies from source_db to docker-entrypoint
+
+  destination_postgres:   # where the cleaned data is going to go
+    image: postgres:latest   #creating another PostgreSQL database for image
+    ports:
+      -"5434:5432"  #its not 5433 again, because we have already used it and two containers cannot use the same port
+    networks:
+      -elt_network  # added it to the same network
+    environment:
+      -POSTGRES_DB: destination_db   
+      -POSTGRES_USER: postgres  
+      -POSTGRES_PASSWORD: secret 
+
+
+  elt_script:
+    build:  # PostgreSQL already exists on dockerhub, but not python, so we have to build your own image
+      context: ./elt_script   # go inside the elt folder
+      dockerfile: Dockerfile  # inside the elt folder, docker looks for Dockerfile
+    command: ["python", "elt_script.py"]  #since its a python file, and the name of the python file
+    networks:
+      -elt_network  # added to the network
+    depends_on:
+      - source_postgres
+      - destination_postgres
+    
+
+networks:
+  elt_network:
+    driver: bridge  # docker's default local network
